@@ -1,65 +1,95 @@
-import Image from "next/image";
+import Link from "next/link"
 
-export default function Home() {
+export default function HomePage() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-white text-gray-900">
+
+      {/* Hero Section */}
+      <section className="text-center py-20 px-6 bg-gray-50">
+        <h1 className="text-4xl font-bold mb-6">
+          Stop Losing Clients Because You Forgot to Follow Up
+        </h1>
+
+        <p className="text-lg mb-8 max-w-2xl mx-auto">
+          FollowUpPro reminds you exactly when to follow up —
+          and writes the message for you.
+          Close more deals without stress.
+        </p>
+
+        <Link
+          href="/signup"
+          className="bg-blue-600 text-white px-6 py-3 rounded text-lg hover:bg-blue-700"
+        >
+          Start Free 14‑Day Trial
+        </Link>
+
+        <p className="mt-4 text-sm text-gray-500">
+          No credit card required
+        </p>
+      </section>
+
+      {/* How It Works */}
+      <section className="py-20 px-6 max-w-5xl mx-auto">
+        <h2 className="text-3xl font-bold text-center mb-12">
+          How It Works
+        </h2>
+
+        <div className="grid md:grid-cols-3 gap-8 text-center">
+          <div>
+            <h3 className="font-bold text-xl mb-3">1. Add Your Lead</h3>
+            <p>
+              Enter your client details and set a follow-up date.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-xl mb-3">2. Get Reminded</h3>
+            <p>
+              We notify you exactly when it’s time to follow up.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-xl mb-3">3. Generate & Send</h3>
+            <p>
+              AI writes a professional follow-up email instantly.
+            </p>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      </section>
+
+      {/* Pricing */}
+      <section className="py-20 px-6 bg-gray-50">
+        <h2 className="text-3xl font-bold text-center mb-12">
+          Simple Pricing
+        </h2>
+
+        <div className="max-w-xl mx-auto bg-white p-8 rounded shadow text-center">
+          <h3 className="text-2xl font-bold mb-4">
+            Pro Plan — $19/month
+          </h3>
+
+          <ul className="mb-6 space-y-2 text-gray-700">
+            <li>✅ Unlimited leads</li>
+            <li>✅ Unlimited AI follow-ups</li>
+            <li>✅ Email sending</li>
+            <li>✅ Reminder system</li>
+          </ul>
+
+          <Link
+            href="/signup"
+            className="bg-blue-600 text-white px-6 py-3 rounded text-lg hover:bg-blue-700"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            Start Free Trial
+          </Link>
         </div>
-      </main>
+      </section>
+
+      {/* Footer */}
+      <footer className="text-center py-8 text-gray-500 text-sm">
+        © {new Date().getFullYear()} FollowUpPro. All rights reserved.
+      </footer>
+
     </div>
-  );
+  )
 }
