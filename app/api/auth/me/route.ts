@@ -1,23 +1,15 @@
-import { NextRequest, NextResponse } from "next/server"
-import jwt from "jsonwebtoken"
-import { connectDB } from "@/lib/db"
-import User from "@/models/User"
+import { NextResponse } from "next/server"
 
-export async function GET(req: NextRequest) {
-  try {
-    await connectDB()
+export async function POST() {
+  const response = NextResponse.json({ message: "Logged out" })
 
-    const token = req.cookies.get("token")?.value
-    if (!token) return NextResponse.json(null)
+  response.cookies.set("token", "", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    expires: new Date(0)
+  })
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any
-
-    const user = await User.findById(decoded.userId).select("-password")
-
-    if (!user) return NextResponse.json(null)
-
-    return NextResponse.json(user)
-  } catch {
-    return NextResponse.json(null)
-  }
+  return response
 }
