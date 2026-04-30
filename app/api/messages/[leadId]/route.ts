@@ -17,18 +17,38 @@ function getUserId(req: NextRequest) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { leadId: string } }
+  context: { params: Promise<{ leadId: string }> }
 ) {
-  await connectDB()
+  try {
+    await connectDB()
 
-  const userId = getUserId(req)
-  if (!userId)
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    const { leadId } = await context.params
 
-  const messages = await Message.find({
-    leadId: params.leadId,
-    userId
-  }).sort({ createdAt: -1 })
+    const userId = getUserId(req)
 
-  return NextResponse.json(messages)
+    if (!userId) {
+      return NextResponse.json(
+        { message: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
+    const messages = await Message.find({
+      leadId,
+      userId
+    }).sort({ createdAt: -1 })
+
+    return NextResponse.json(messages)
+
+  } catch (error) {
+
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Fetch messages error:", error)
+    }
+
+    return NextResponse.json(
+      { message: "Server error fetching messages" },
+      { status: 500 }
+    )
+  }
 }
