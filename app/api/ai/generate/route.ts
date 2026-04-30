@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import jwt from "jsonwebtoken"
+import { z } from "zod"
 import { connectDB } from "@/lib/db"
 import User from "@/models/User"
 import Lead from "@/models/Lead"
 import Message from "@/models/Message"
-import { generateFollowUp } from "@/lib/openai"
+import { generateFollowUpEmail } from "@/lib/openai"
+import { aiLimiter } from "@/lib/rateLimiter"
 
-function getUserIdFromToken(req: NextRequest) {
+function getUserId(req: NextRequest) {
   const token = req.cookies.get("token")?.value
   if (!token) return null
 
@@ -19,53 +21,117 @@ function getUserIdFromToken(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  await connectDB()
+  try {
+    await connectDB()
 
-  const userId = getUserIdFromToken(req)
-  if (!userId)
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
-
-  const { leadId, followUpType } = await req.json()
-
-  const user = await User.findById(userId)
-  const lead = await Lead.findOne({ _id: leadId, userId })
-
-  if (!lead)
-    return NextResponse.json({ message: "Lead not found" }, { status: 404 })
-
-  // Plan check
-  if (user.plan === "free" && user.aiGenerationsThisMonth >= 5) {
-    return NextResponse.json({ message: "AI limit reached" }, { status: 403 })
-  }
-
-  const daysSinceLastContact = lead.lastContactedAt
-    ? Math.floor(
-        (Date.now() - new Date(lead.lastContactedAt).getTime()) /
-          (1000 * 60 * 60 * 24)
+    const userId = getUserId(req)
+    if (!userId) {
+      return NextResponse.json(
+        { message: "Unauthorized" },
+        { status: 401 }
       )
-    : 3
+    }
 
-  const aiResponse = await generateFollowUp({
-    businessType: user.businessType || "service provider",
-    clientName: lead.name,
-    serviceOffered: lead.serviceOffered,
-    daysSinceLastContact,
-    followUpType
-  })
+    try {
+      await aiLimiter.consume(userId)
+    } catch {
+      return NextResponse.json(
+        { message: "Too many requests. Slow down." },
+        { status: 429 }
+      )
+    }
 
-  const [subjectLine, ...bodyParts] = aiResponse.split("\n")
-  const subject = subjectLine.replace("Subject:", "").trim()
-  const content = bodyParts.join("\n").trim()
+    const schema = z.object({
+      leadId: z.string().min(1)
+    })
 
-  await Message.create({
-    userId,
-    leadId,
-    subject,
-    content
-  })
+    const body = await req.json()
+    const parsed = schema.safeParse(body)
 
-  user.aiGenerationsThisMonth += 1
-  await user.save()
+    if (!parsed.success) {
+      return NextResponse.json(
+        { message: "Invalid input" },
+        { status: 400 }
+      )
+    }
 
-  return NextResponse.json({ subject, content })
+    const { leadId } = parsed.data
+
+    const user = await User.findById(userId)
+    if (!user) {
+      return NextResponse.json(
+        { message: "User not found" },
+        { status: 404 }
+      )
+    }
+
+    if (
+      user.subscriptionStatus === "trial" &&
+      user.trialEndsAt &&
+      new Date() > new Date(user.trialEndsAt)
+    ) {
+      user.subscriptionStatus = "expired"
+      user.plan = "free"
+      await user.save()
+    }
+
+    const currentMonth = new Date().getMonth()
+
+    if (user.lastResetMonth !== currentMonth) {
+      user.aiGenerationsThisMonth = 0
+      user.lastResetMonth = currentMonth
+      await user.save()
+    }
+
+    if (user.plan === "free") {
+      if (user.aiGenerationsThisMonth >= 5) {
+        return NextResponse.json(
+          { message: "AI limit reached. Upgrade to Pro." },
+          { status: 403 }
+        )
+      }
+    }
+
+    const lead = await Lead.findOne({ _id: leadId, userId })
+
+    if (!lead) {
+      return NextResponse.json(
+        { message: "Lead not found" },
+        { status: 404 }
+      )
+    }
+
+    const aiText = await generateFollowUpEmail(
+      lead.name,
+      lead.serviceOffered || "consultation"
+    )
+
+    const lines = aiText.split("\n")
+    const subject = lines[0].replace("Subject:", "").trim()
+    const content = lines.slice(1).join("\n").trim()
+
+    await Message.create({
+      userId,
+      leadId,
+      subject,
+      content
+    })
+
+    user.aiGenerationsThisMonth += 1
+    await user.save()
+
+    return NextResponse.json({ subject, content })
+
+  } catch (error) {
+
+    // ✅ SAFE LOGGING
+    if (process.env.NODE_ENV !== "production") {
+      console.error("AI generation error:", error)
+    }
+
+    return NextResponse.json(
+      { message: "Server error during AI generation" },
+      { status: 500 }
+    )
+  }
 }

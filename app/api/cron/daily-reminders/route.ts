@@ -5,50 +5,75 @@ import User from "@/models/User"
 import { sendEmail } from "@/lib/email"
 
 export async function POST(req: NextRequest) {
-  if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
-  }
+  try {
+    const authHeader = req.headers.get("authorization")
 
-  await connectDB()
+    if (
+      !authHeader ||
+      authHeader !== `Bearer ${process.env.CRON_SECRET}`
+    ) {
+      return NextResponse.json(
+        { message: "Unauthorized" },
+        { status: 401 }
+      )
+    }
 
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
+    await connectDB()
 
-  const todayEnd = new Date()
-  todayEnd.setHours(23, 59, 59, 999)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
 
-  const leads = await Lead.find({
-    nextFollowUpAt: { $gte: todayStart, $lte: todayEnd },
-    status: { $ne: "closed_won" }
-  }).populate("userId")
+    const tomorrow = new Date(today)
+    tomorrow.setDate(today.getDate() + 1)
 
-  const grouped: any = {}
+    const leads = await Lead.find({
+      nextFollowUpAt: { $gte: today, $lt: tomorrow }
+    }).populate("userId")
 
-  leads.forEach((lead: any) => {
-    const userId = lead.userId._id.toString()
-    if (!grouped[userId]) grouped[userId] = []
-    grouped[userId].push(lead)
-  })
+    const grouped: Record<string, any[]> = {}
 
-  for (const userId in grouped) {
-    const user = await User.findById(userId)
-    const userLeads = grouped[userId]
-
-    const list = userLeads
-      .map((l: any) => `• ${l.name} – ${l.serviceOffered}`)
-      .join("<br/>")
-
-    await sendEmail({
-      to: user.email,
-      subject: `You have ${userLeads.length} follow-ups today`,
-      html: `
-        <p>Hi ${user.name},</p>
-        <p>You have ${userLeads.length} follow-ups scheduled today:</p>
-        <p>${list}</p>
-        <p><a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard">Open Dashboard</a></p>
-      `
+    leads.forEach((lead: any) => {
+      const userId = lead.userId._id.toString()
+      if (!grouped[userId]) grouped[userId] = []
+      grouped[userId].push(lead)
     })
-  }
 
-  return NextResponse.json({ success: true })
+    for (const userId in grouped) {
+      const user = await User.findById(userId)
+      if (!user) continue
+
+      const userLeads = grouped[userId]
+
+      const list = userLeads
+        .map(l => `• ${l.name} – ${l.serviceOffered || "Service"}`)
+        .join("<br/>")
+
+      await sendEmail({
+        to: user.email,
+        subject: `You have ${userLeads.length} follow-up(s) today`,
+        html: `
+          <p>Hi ${user.name},</p>
+          <p>You have follow-ups scheduled today:</p>
+          <p>${list}</p>
+          <p>
+            <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard">
+              Open Dashboard
+            </a>
+          </p>
+        `
+      })
+    }
+
+    return NextResponse.json({ success: true })
+
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Daily reminder error:", error)
+    }
+
+    return NextResponse.json(
+      { message: "Server error" },
+      { status: 500 }
+    )
+  }
 }

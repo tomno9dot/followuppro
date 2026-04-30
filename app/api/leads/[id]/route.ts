@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import jwt from "jsonwebtoken"
-import Lead from "@/models/Lead"
 import { connectDB } from "@/lib/db"
+import Lead from "@/models/Lead"
 
-function getUserIdFromToken(req: NextRequest) {
+function getUserId(req: NextRequest) {
   const token = req.cookies.get("token")?.value
   if (!token) return null
 
@@ -15,49 +15,68 @@ function getUserIdFromToken(req: NextRequest) {
   }
 }
 
-// GET single lead
-export async function GET(req: NextRequest, { params }: any) {
-  await connectDB()
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    await connectDB()
 
-  const userId = getUserIdFromToken(req)
-  if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    const userId = getUserId(req)
 
-  const lead = await Lead.findOne({ _id: params.id, userId })
-  if (!lead) return NextResponse.json({ message: "Not found" }, { status: 404 })
+    if (!userId) {
+      return NextResponse.json(
+        { message: "Unauthorized" },
+        { status: 401 }
+      )
+    }
 
-  return NextResponse.json(lead)
-}
+    const body = await req.json()
 
-// PUT update lead
-export async function PUT(req: NextRequest, { params }: any) {
-  await connectDB()
+    const lead = await Lead.findOne({
+      _id: params.id,
+      userId
+    })
 
-  const userId = getUserIdFromToken(req)
-  if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    if (!lead) {
+      return NextResponse.json(
+        { message: "Lead not found" },
+        { status: 404 }
+      )
+    }
 
-  const data = await req.json()
+    // ✅ Update status if provided
+    if (body.status) {
+      lead.status = body.status
+    }
 
-  const lead = await Lead.findOneAndUpdate(
-    { _id: params.id, userId },
-    data,
-    { new: true }
-  )
+    // ✅ Update deal value if provided
+    if (typeof body.dealValue === "number") {
+      lead.dealValue = body.dealValue
+    }
 
-  if (!lead) return NextResponse.json({ message: "Not found" }, { status: 404 })
+    // ✅ Optional: enforce deal value when closed
+    if (
+      body.status === "closed_won" &&
+      (!lead.dealValue || lead.dealValue <= 0)
+    ) {
+      // You can choose default behavior here
+      lead.dealValue = 0
+    }
 
-  return NextResponse.json(lead)
-}
+    await lead.save()
 
-// DELETE lead
-export async function DELETE(req: NextRequest, { params }: any) {
-  await connectDB()
+    return NextResponse.json(lead)
 
-  const userId = getUserIdFromToken(req)
-  if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+  } catch (error) {
 
-  const lead = await Lead.findOneAndDelete({ _id: params.id, userId })
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Update lead error:", error)
+    }
 
-  if (!lead) return NextResponse.json({ message: "Not found" }, { status: 404 })
-
-  return NextResponse.json({ message: "Deleted" })
+    return NextResponse.json(
+      { message: "Server error updating lead" },
+      { status: 500 }
+    )
+  }
 }

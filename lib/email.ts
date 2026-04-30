@@ -12,7 +12,7 @@ export async function sendEmail({
   html: string
 }) {
   await resend.emails.send({
-    from: `FollowUpPro <${process.env.SUPPORT_EMAIL}>`,
+    from: "FollowUpPro <support@yourdomain.com>",
     to,
     subject,
     html

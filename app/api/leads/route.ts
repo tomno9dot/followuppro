@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import jwt from "jsonwebtoken"
-import Lead from "@/models/Lead"
+import { z } from "zod"
 import { connectDB } from "@/lib/db"
+import Lead from "@/models/Lead"
 
-function getUserIdFromToken(req: NextRequest) {
+function getUserId(req: NextRequest) {
   const token = req.cookies.get("token")?.value
   if (!token) return null
 
@@ -15,33 +16,100 @@ function getUserIdFromToken(req: NextRequest) {
   }
 }
 
-// GET all leads for user
 export async function GET(req: NextRequest) {
-  await connectDB()
+  try {
+    await connectDB()
 
-  const userId = getUserIdFromToken(req)
-  if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    const userId = getUserId(req)
 
-  const leads = await Lead.find({ userId })
-  return NextResponse.json(leads)
+    if (!userId) {
+      return NextResponse.json(
+        { message: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
+    const leads = await Lead.find({ userId }).sort({
+      createdAt: -1
+    })
+
+    return NextResponse.json(leads)
+
+  } catch (error) {
+
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Fetch leads error:", error)
+    }
+
+    return NextResponse.json(
+      { message: "Server error fetching leads" },
+      { status: 500 }
+    )
+  }
 }
 
-// POST create lead
 export async function POST(req: NextRequest) {
-  await connectDB()
+  try {
+    await connectDB()
 
-  const userId = getUserIdFromToken(req)
-  if (!userId) return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    const userId = getUserId(req)
 
-  const { name, email, serviceOffered, nextFollowUpAt } = await req.json()
+    if (!userId) {
+      return NextResponse.json(
+        { message: "Unauthorized" },
+        { status: 401 }
+      )
+    }
 
-  const lead = await Lead.create({
-    userId,
-    name,
-    email,
-    serviceOffered,
-    nextFollowUpAt: new Date(nextFollowUpAt)
-  })
+    // ✅ Validate input
+    const schema = z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+      serviceOffered: z.string().optional(),
+      dealValue: z.number().optional(),
+      nextFollowUpAt: z.string().optional()
+    })
 
-  return NextResponse.json(lead, { status: 201 })
+    const body = await req.json()
+    const parsed = schema.safeParse(body)
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { message: "Invalid lead data" },
+        { status: 400 }
+      )
+    }
+
+    const {
+      name,
+      email,
+      serviceOffered,
+      dealValue,
+      nextFollowUpAt
+    } = parsed.data
+
+    const lead = await Lead.create({
+      userId,
+      name,
+      email,
+      serviceOffered,
+      dealValue: dealValue || 0,
+      nextFollowUpAt: nextFollowUpAt
+        ? new Date(nextFollowUpAt)
+        : null
+    })
+
+    return NextResponse.json(lead)
+
+  } catch (error) {
+
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Create lead error:", error)
+    }
+
+    return NextResponse.json(
+      { message: "Server error creating lead" },
+      { status: 500 }
+    )
+  }
 }

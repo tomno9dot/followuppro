@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcrypt"
 import jwt from "jsonwebtoken"
+import { z } from "zod"
 import { connectDB } from "@/lib/db"
 import User from "@/models/User"
 
@@ -8,16 +9,28 @@ export async function POST(req: NextRequest) {
   try {
     await connectDB()
 
-    const { email, password } = await req.json()
+    // ✅ Validate input
+    const schema = z.object({
+      email: z.string().email(),
+      password: z.string().min(6)
+    })
 
-    if (!email || !password) {
+    const body = await req.json()
+    const parsed = schema.safeParse(body)
+
+    if (!parsed.success) {
       return NextResponse.json(
-        { message: "Email and password required" },
+        { message: "Invalid email or password format" },
         { status: 400 }
       )
     }
 
-    const user = await User.findOne({ email })
+    const { email, password } = parsed.data
+
+    // ✅ Case-insensitive email
+    const user = await User.findOne({
+      email: email.toLowerCase()
+    })
 
     if (!user) {
       return NextResponse.json(
@@ -26,36 +39,47 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const isMatch = await bcrypt.compare(password, user.password)
+    const passwordMatch = await bcrypt.compare(
+      password,
+      user.password
+    )
 
-    if (!isMatch) {
+    if (!passwordMatch) {
       return NextResponse.json(
         { message: "Invalid credentials" },
         { status: 400 }
       )
     }
 
+    // ✅ Create JWT
     const token = jwt.sign(
       { userId: user._id },
       process.env.JWT_SECRET!,
       { expiresIn: "7d" }
     )
 
-    const response = NextResponse.json({ message: "Login successful" })
+    const response = NextResponse.json({
+      message: "Login successful"
+    })
 
+    // ✅ Secure production cookie
     response.cookies.set("token", token, {
       httpOnly: true,
-      secure: true,      // ✅ Always true in production
-      sameSite: "lax",   // ✅ Important
-      path: "/"          // ✅ Must match logout
+      secure: true,
+      sameSite: "lax",
+      path: "/"
     })
 
     return response
 
   } catch (error) {
-    console.error("Login error:", error)
+
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Login error:", error)
+    }
+
     return NextResponse.json(
-      { message: "Server error" },
+      { message: "Server error during login" },
       { status: 500 }
     )
   }
