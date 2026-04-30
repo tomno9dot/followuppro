@@ -17,10 +17,12 @@ function getUserId(req: NextRequest) {
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB()
+
+    const { id } = await context.params
 
     const userId = getUserId(req)
 
@@ -34,7 +36,7 @@ export async function PUT(
     const body = await req.json()
 
     const lead = await Lead.findOne({
-      _id: params.id,
+      _id: id,
       userId
     })
 
@@ -45,23 +47,16 @@ export async function PUT(
       )
     }
 
-    // ✅ Update status if provided
     if (body.status) {
       lead.status = body.status
     }
 
-    // ✅ Update deal value if provided
     if (typeof body.dealValue === "number") {
       lead.dealValue = body.dealValue
     }
 
-    // ✅ Optional: enforce deal value when closed
-    if (
-      body.status === "closed_won" &&
-      (!lead.dealValue || lead.dealValue <= 0)
-    ) {
-      // You can choose default behavior here
-      lead.dealValue = 0
+    if (body.nextFollowUpAt) {
+      lead.nextFollowUpAt = new Date(body.nextFollowUpAt)
     }
 
     await lead.save()
@@ -69,7 +64,6 @@ export async function PUT(
     return NextResponse.json(lead)
 
   } catch (error) {
-
     if (process.env.NODE_ENV !== "production") {
       console.error("Update lead error:", error)
     }
