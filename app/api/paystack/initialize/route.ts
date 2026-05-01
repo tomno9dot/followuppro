@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import jwt from "jsonwebtoken"
-import { z } from "zod"
 import { connectDB } from "@/lib/db"
 import User from "@/models/User"
 
@@ -21,7 +20,6 @@ export async function POST(req: NextRequest) {
     await connectDB()
 
     const userId = getUserId(req)
-
     if (!userId) {
       return NextResponse.json(
         { message: "Unauthorized" },
@@ -29,24 +27,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const schema = z.object({
-      plan: z.enum(["pro", "proplus"])
-    })
-
-    const body = await req.json()
-    const parsed = schema.safeParse(body)
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        { message: "Invalid plan selected" },
-        { status: 400 }
-      )
-    }
-
-    const { plan } = parsed.data
-
     const user = await User.findById(userId)
-
     if (!user) {
       return NextResponse.json(
         { message: "User not found" },
@@ -54,13 +35,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ✅ Dynamic pricing
-    const pricing = {
-      pro: 2900,      // $29
-      proplus: 3900   // $39
-    }
-
-    const amount = pricing[plan] * 100
+    const amount = 1900 * 100 // ✅ $19 only
 
     const response = await fetch(
       "https://api.paystack.co/transaction/initialize",
@@ -73,10 +48,7 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           email: user.email,
           amount,
-          callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
-          metadata: {
-            plan
-          }
+          callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`
         })
       }
     )
@@ -93,7 +65,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data.data)
 
   } catch (error) {
-
     if (process.env.NODE_ENV !== "production") {
       console.error("Paystack initialize error:", error)
     }

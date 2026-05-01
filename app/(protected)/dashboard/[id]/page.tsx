@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, use } from "react"
 import { useRouter } from "next/navigation"
 
 interface Lead {
@@ -20,7 +20,12 @@ interface Message {
   createdAt: string
 }
 
-export default function LeadDetail({ params }: { params: { id: string } }) {
+export default function LeadDetail({
+  params
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = use(params)  // ✅ FIX HERE
   const router = useRouter()
 
   const [lead, setLead] = useState<Lead | null>(null)
@@ -36,7 +41,7 @@ export default function LeadDetail({ params }: { params: { id: string } }) {
         const leadsRes = await fetch("/api/leads")
         const leads = await leadsRes.json()
 
-        const found = leads.find((l: Lead) => l._id === params.id)
+        const found = leads.find((l: Lead) => l._id === id)
 
         if (!found) {
           router.push("/dashboard")
@@ -45,7 +50,7 @@ export default function LeadDetail({ params }: { params: { id: string } }) {
 
         setLead(found)
 
-        const msgRes = await fetch(`/api/messages/${params.id}`)
+        const msgRes = await fetch(`/api/messages/${id}`)
         const msgData = await msgRes.json()
         setMessages(msgData)
 
@@ -55,11 +60,11 @@ export default function LeadDetail({ params }: { params: { id: string } }) {
     }
 
     fetchData()
-  }, [params.id, router])
+  }, [id, router])
 
   const updateStatus = async (newStatus: string) => {
     try {
-      await fetch(`/api/leads/${params.id}`, {
+      await fetch(`/api/leads/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus })
@@ -82,7 +87,7 @@ export default function LeadDetail({ params }: { params: { id: string } }) {
       const res = await fetch("/api/ai/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadId: params.id })
+        body: JSON.stringify({ leadId: id })
       })
 
       const data = await res.json()
@@ -96,7 +101,7 @@ export default function LeadDetail({ params }: { params: { id: string } }) {
       setSubject(data.subject)
       setContent(data.content)
 
-      const msgRes = await fetch(`/api/messages/${params.id}`)
+      const msgRes = await fetch(`/api/messages/${id}`)
       const msgData = await msgRes.json()
       setMessages(msgData)
 
@@ -122,31 +127,10 @@ export default function LeadDetail({ params }: { params: { id: string } }) {
   return (
     <div className="min-h-screen bg-gray-100 p-10 space-y-8">
 
-      {/* ✅ Lead Info */}
       <div className="bg-white p-6 rounded-xl border shadow-sm space-y-3">
         <h1 className="text-2xl font-bold">{lead.name}</h1>
         <p className="text-gray-600">{lead.email}</p>
         <p className="text-gray-600">{lead.serviceOffered}</p>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Deal Value ($)
-          </label>
-          <p className="text-gray-800">
-            ${lead.dealValue || 0}
-          </p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Next Follow-Up
-          </label>
-          <p className="text-gray-800">
-            {lead.nextFollowUpAt
-              ? new Date(lead.nextFollowUpAt).toLocaleDateString()
-              : "Not set"}
-          </p>
-        </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">
@@ -166,83 +150,56 @@ export default function LeadDetail({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      {/* ✅ AI Generator */}
       <div className="bg-white p-6 rounded-xl border shadow-sm space-y-4">
-
-        <h2 className="text-lg font-semibold">
-          Generate Follow-Up
-        </h2>
-
-        {error && (
-          <div className="bg-red-100 text-red-700 p-3 rounded">
-            {error}
-          </div>
-        )}
-
         <button
           onClick={generateFollowUp}
           disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded-lg disabled:opacity-50"
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg"
         >
           {loading ? "Generating..." : "Generate AI Follow-Up"}
         </button>
 
         {subject && (
           <div className="space-y-4 mt-4">
+            <input
+              value={subject}
+              readOnly
+              className="w-full border px-4 py-2 rounded-lg"
+            />
 
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Subject
-              </label>
-              <input
-                value={subject}
-                readOnly
-                className="w-full border px-4 py-2 rounded-lg"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Email Content
-              </label>
-              <textarea
-                value={content}
-                readOnly
-                className="w-full border px-4 py-2 rounded-lg h-40"
-              />
-            </div>
+            <textarea
+              value={content}
+              readOnly
+              className="w-full border px-4 py-2 rounded-lg h-40"
+            />
 
             <button
               onClick={copyToClipboard}
-              className="text-blue-600 hover:underline text-sm"
+              className="text-blue-600 underline text-sm"
             >
               Copy to Clipboard
             </button>
-
           </div>
         )}
       </div>
 
-      {/* ✅ Message History */}
       {messages.length > 0 && (
         <div className="bg-white p-6 rounded-xl border shadow-sm">
-          <h2 className="text-lg font-semibold mb-4">
+          <h2 className="font-semibold mb-4">
             Message History
           </h2>
 
-          <div className="space-y-4">
-            {messages.map((msg) => (
-              <div key={msg._id} className="border-b pb-3">
-                <p className="font-medium">{msg.subject}</p>
-                <p className="text-sm text-gray-600 whitespace-pre-line">
-                  {msg.content}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {new Date(msg.createdAt).toLocaleString()}
-                </p>
-              </div>
-            ))}
-          </div>
+          {messages.map((msg) => (
+            <div key={msg._id} className="mb-4">
+              <p className="font-medium">{msg.subject}</p>
+              <p className="text-sm text-gray-600 whitespace-pre-line">
+                {msg.content}
+              </p>
+              <p className="text-xs text-gray-400">
+                {new Date(msg.createdAt).toLocaleString()}
+              </p>
+            </div>
+          ))}
         </div>
       )}
 
